@@ -1,0 +1,921 @@
+---
+title: "Pruebas Estadísticas en R"
+subtitle: "Prueba t · ANOVA One-Way · ANOVA Two-Way · Pruebas Adicionales"
+author: "Vicerrectoría de Investigación — Universidad Autónoma de Chiriquí (UNACHI)"
+date: "`r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 4
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    fig_width: 9
+    fig_height: 5
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  comment = "#>",
+  fig.align = "center"
+)
+```
+
+```{r paquetes, include=FALSE}
+# Instalar si no están disponibles:
+# install.packages(c("ggplot2","dplyr","car","rstatix","nortest","coin","effectsize"))
+library(ggplot2)
+library(dplyr)
+library(car)
+library(rstatix)
+library(nortest)
+library(effectsize)
+```
+
+---
+
+> **Objetivo del taller:** Desarrollar competencias en la selección, ejecución e
+> interpretación de pruebas de inferencia estadística usando R, bajo el marco
+> del método científico hipotético-deductivo.
+
+---
+
+# Marco Conceptual: Inferencia Estadística
+
+## Hipótesis Estadísticas
+
+Toda prueba de hipótesis parte de dos enunciados mutuamente excluyentes
+(Triola, 2018; Montgomery & Runger, 2018):
+
+- **Hipótesis nula (H₀):** afirmación de igualdad o ausencia de efecto que se
+  asume cierta hasta encontrar evidencia en contra.
+- **Hipótesis alternativa (H₁ o Hₐ):** afirmación que contradice H₀; lo que el
+  investigador desea demostrar.
+
+## Valor p y Nivel de Significancia
+
+El **valor p** (*p-value*) es la probabilidad de obtener un resultado tan extremo
+o más extremo que el observado, asumiendo que H₀ es verdadera (Fisher, 1925).
+
+**Regla de decisión:** Si p ≤ α → **se rechaza H₀**.
+
+El nivel de significancia estándar en ciencias sociales y biomédicas es **α = 0.05**,
+aunque también se usan α = 0.01 y α = 0.10 según el área.
+
+## Supuestos Comunes
+
+Antes de aplicar cualquier prueba paramétrica se deben verificar:
+
+1. **Normalidad:** los datos provienen de una distribución normal.
+2. **Homogeneidad de varianzas (homocedasticidad):** las varianzas de los grupos son iguales.
+3. **Independencia:** las observaciones son independientes entre sí.
+
+```{r framework-visual, echo=FALSE, fig.height=3, fig.cap="Figura 1. Árbol de decisión simplificado para selección de prueba estadística."}
+par(mar = c(1,1,2,1), bg = "#f8fafc")
+plot(0, 0, type = "n", xlim = c(0,10), ylim = c(0,5),
+     axes = FALSE, xlab = "", ylab = "",
+     main = "Selección de Prueba: ¿Paramétrica o No Paramétrica?")
+
+# Nodos
+rect(3.5, 3.8, 6.5, 4.6, col="#1a56db", border=NA); text(5, 4.2, "¿Normalidad\ny n suficiente?", col="white", cex=.82, font=2)
+rect(0.2, 1.8, 3.2, 2.6, col="#059669", border=NA); text(1.7, 2.2, "Prueba\nPARAMÉTRICA", col="white", cex=.82, font=2)
+rect(6.8, 1.8, 9.8, 2.6, col="#dc2626", border=NA); text(8.3, 2.2, "Prueba NO\nPARAMÉTRICA", col="white", cex=.82, font=2)
+
+rect(0.0, 0.2, 3.4, 1.1, col="#d1fae5", border="#059669"); text(1.7, 0.65, "t-test · ANOVA\nPearson · Regresión", cex=.72)
+rect(6.6, 0.2, 10.0, 1.1, col="#fee2e2", border="#dc2626"); text(8.3, 0.65, "Wilcoxon · Kruskal-Wallis\nSpearman · Chi²", cex=.72)
+
+arrows(5, 3.8, 1.7, 2.6, length=.1, col="#059669", lwd=2)
+arrows(5, 3.8, 8.3, 2.6, length=.1, col="#dc2626", lwd=2)
+arrows(1.7, 1.8, 1.7, 1.1, length=.1, col="#059669", lwd=1.5)
+arrows(8.3, 1.8, 8.3, 1.1, length=.1, col="#dc2626", lwd=1.5)
+text(2.6, 3.35, "SÍ", col="#059669", font=2, cex=.85)
+text(7.4, 3.35, "NO", col="#dc2626", font=2, cex=.85)
+```
+
+---
+
+# Prueba t de Student
+
+## Fundamento Teórico
+
+La **prueba t** (*t-test*) es una prueba paramétrica que compara medias cuando la
+varianza poblacional es desconocida y la muestra es pequeña o moderada. Fue
+desarrollada por **William S. Gosset** en 1908, publicada bajo el pseudónimo
+"Student" (Student, 1908).
+
+El estadístico de prueba sigue una distribución **t de Student** con $\nu$
+grados de libertad:
+
+$$t = \frac{\bar{x} - \mu_0}{s / \sqrt{n}}$$
+
+Existen tres variantes según el diseño del estudio:
+
+| Variante | H₀ | Uso |
+|---|---|---|
+| Una muestra | μ = μ₀ | Comparar una media contra valor teórico |
+| Dos muestras independientes | μ₁ = μ₂ | Comparar medias de dos grupos distintos |
+| Muestras pareadas | μd = 0 | Comparar medias antes-después en los mismos sujetos |
+
+**Supuestos:**
+- Distribución normal (o n > 30 por TLC)
+- Varianzas iguales (Welch corrige si no se cumple)
+- Independencia de observaciones
+
+---
+
+## Prueba t de Una Muestra
+
+**Pregunta:** ¿El rendimiento promedio de un grupo de estudiantes difiere de 70 puntos?
+
+```{r t-una-muestra-datos}
+set.seed(42)
+notas <- c(74, 68, 81, 72, 65, 78, 70, 83, 67, 75,
+           71, 79, 66, 73, 80, 69, 77, 64, 76, 82)
+cat("n =", length(notas), "\n")
+cat("Media muestral:", round(mean(notas), 2), "\n")
+cat("Desv. Estándar:", round(sd(notas), 2), "\n")
+```
+
+```{r t-una-muestra-supuestos}
+# ── Verificar normalidad ─────────────────────────────────────────
+shapiro.test(notas)
+```
+
+```{r t-una-muestra-test}
+# ── Prueba t de una muestra ──────────────────────────────────────
+# H₀: μ = 70    H₁: μ ≠ 70    α = 0.05
+resultado_t1 <- t.test(notas, mu = 70, alternative = "two.sided",
+                       conf.level = 0.95)
+print(resultado_t1)
+```
+
+```{r t-una-muestra-efectotamaño}
+# ── Tamaño del efecto (d de Cohen) ───────────────────────────────
+cohens_d <- (mean(notas) - 70) / sd(notas)
+cat(sprintf("d de Cohen = %.3f  (|d| < 0.2 nulo | 0.2–0.5 pequeño | 0.5–0.8 mediano | > 0.8 grande)\n",
+            cohens_d))
+```
+
+```{r t-una-muestra-graf, fig.cap="Figura 2. Distribución de notas vs valor hipotético μ₀ = 70.", fig.height=4}
+df_notas <- data.frame(nota = notas)
+ggplot(df_notas, aes(x = nota)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 8,
+                 fill = "#3b82f6", color = "white", alpha = .8) +
+  geom_density(color = "#1e40af", linewidth = 1) +
+  geom_vline(xintercept = mean(notas), color = "#dc2626",
+             linewidth = 1.2, linetype = "dashed") +
+  geom_vline(xintercept = 70, color = "#f59e0b",
+             linewidth = 1.2, linetype = "dotted") +
+  annotate("text", x = mean(notas) + .8, y = .09,
+           label = paste0("x̄ = ", round(mean(notas),1)),
+           color = "#dc2626", size = 3.5, fontface = "bold") +
+  annotate("text", x = 70 - .8, y = .07,
+           label = "μ₀ = 70", color = "#f59e0b",
+           size = 3.5, fontface = "bold") +
+  labs(title = "Prueba t — Una Muestra",
+       subtitle = "H₀: μ = 70  vs  H₁: μ ≠ 70",
+       x = "Nota", y = "Densidad") +
+  theme_minimal(base_size = 12)
+```
+
+**Interpretación:** `r ifelse(resultado_t1$p.value < .05, paste0("Con p = ", round(resultado_t1$p.value,4), " < 0.05, se rechaza H₀. La media muestral de ", round(mean(notas),1), " difiere significativamente de 70."), paste0("Con p = ", round(resultado_t1$p.value,4), " ≥ 0.05, no se rechaza H₀."))`
+
+---
+
+## Prueba t de Dos Muestras Independientes
+
+**Pregunta:** ¿Existe diferencia en el rendimiento entre el Grupo A y el Grupo B?
+
+```{r t-dos-muestras-datos}
+set.seed(123)
+grupo_a <- c(78, 82, 75, 88, 71, 85, 79, 83, 76, 80)
+grupo_b <- c(70, 65, 73, 68, 75, 62, 71, 69, 74, 66)
+
+resumen <- data.frame(
+  Grupo = c("A", "B"),
+  n     = c(length(grupo_a), length(grupo_b)),
+  Media = round(c(mean(grupo_a), mean(grupo_b)), 2),
+  SD    = round(c(sd(grupo_a), sd(grupo_b)), 2)
+)
+print(resumen)
+```
+
+```{r t-dos-muestras-supuestos}
+# Normalidad por grupo
+shapiro.test(grupo_a)
+shapiro.test(grupo_b)
+# Homogeneidad de varianzas (prueba de Levene)
+datos_g <- data.frame(
+  rendimiento = c(grupo_a, grupo_b),
+  grupo       = factor(rep(c("A","B"), each=10))
+)
+leveneTest(rendimiento ~ grupo, data = datos_g)
+```
+
+```{r t-dos-muestras-test}
+# H₀: μA = μB    H₁: μA ≠ μB    α = 0.05
+# var.equal=TRUE si Levene no significativo; FALSE para corrección Welch
+resultado_t2 <- t.test(grupo_a, grupo_b,
+                       alternative = "two.sided",
+                       var.equal   = TRUE,
+                       conf.level  = 0.95)
+print(resultado_t2)
+```
+
+```{r t-dos-muestras-efecto}
+d_cohen <- cohens_d(rendimiento ~ grupo, data = datos_g)
+print(d_cohen)
+```
+
+```{r t-dos-muestras-graf, fig.cap="Figura 3. Comparación de rendimiento entre grupos.", fig.height=4}
+ggplot(datos_g, aes(x = grupo, y = rendimiento, fill = grupo)) +
+  geom_boxplot(alpha = .7, width = .4, outlier.shape = 21) +
+  geom_jitter(width = .1, size = 2.2, alpha = .8,
+              aes(color = grupo)) +
+  stat_summary(fun = mean, geom = "point", shape = 23,
+               size = 4, fill = "white") +
+  scale_fill_manual(values = c("#3b82f6","#ef4444")) +
+  scale_color_manual(values = c("#1e40af","#b91c1c")) +
+  labs(title = "Prueba t — Dos Muestras Independientes",
+       subtitle = "◆ = media del grupo",
+       x = "Grupo", y = "Rendimiento") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+```
+
+---
+
+## Prueba t de Muestras Pareadas
+
+**Pregunta:** ¿Un programa de intervención mejoró significativamente el rendimiento?
+
+```{r t-pareado-datos}
+set.seed(7)
+antes  <- c(60, 55, 70, 65, 58, 72, 63, 68, 57, 74)
+despues<- antes + round(rnorm(10, mean = 8, sd = 4))
+
+diferencias <- despues - antes
+cat("Diferencias (despues - antes):\n"); print(diferencias)
+cat("\nMedia de diferencias:", round(mean(diferencias), 2), "\n")
+cat("SD de diferencias:   ", round(sd(diferencias), 2), "\n")
+```
+
+```{r t-pareado-test}
+# H₀: μd = 0  (sin cambio)   H₁: μd > 0  (mejoría)
+resultado_tp <- t.test(despues, antes,
+                       paired      = TRUE,
+                       alternative = "greater",
+                       conf.level  = 0.95)
+print(resultado_tp)
+```
+
+```{r t-pareado-graf, fig.cap="Figura 4. Rendimiento antes y después de la intervención.", fig.height=4}
+df_par <- data.frame(
+  sujeto = rep(1:10, 2),
+  momento = factor(rep(c("Antes","Después"), each=10),
+                   levels=c("Antes","Después")),
+  valor = c(antes, despues)
+)
+ggplot(df_par, aes(x=momento, y=valor, group=sujeto)) +
+  geom_line(alpha=.5, color="#64748b", linewidth=.8) +
+  geom_point(aes(color=momento), size=3.5) +
+  stat_summary(aes(group=1), fun=mean, geom="line",
+               linewidth=1.5, color="#1e40af", linetype="dashed") +
+  stat_summary(aes(group=1), fun=mean, geom="point",
+               size=5, shape=18, color="#1e40af") +
+  scale_color_manual(values=c("#f59e0b","#3b82f6")) +
+  labs(title="Prueba t Pareada — Intervención Educativa",
+       subtitle="Línea azul punteada = media del grupo",
+       x="Momento", y="Rendimiento", color="") +
+  theme_minimal(base_size=12)
+```
+
+---
+
+## 🎯 Problemas Propuestos — Prueba t
+
+> **Instrucción:** Ejecute el análisis completo en un nuevo chunk: verificación
+> de supuestos, prueba, decisión e interpretación en contexto.
+
+**Problema 1.1** *(Una muestra)*
+Un laboratorio afirma que la concentración media de un reactivo es 50 mg/L.
+Se toman 15 muestras con los siguientes valores:
+`c(48.2, 51.3, 49.7, 52.1, 47.8, 50.4, 53.0, 48.9, 51.6, 49.1, 52.4, 47.5, 50.8, 51.2, 49.5)`
+Con α = 0.05, ¿difiere la concentración real del valor declarado?
+
+**Problema 1.2** *(Dos muestras independientes)*
+Se comparan tiempos de respuesta (segundos) entre dos interfaces de usuario:
+
+- Interfaz A: `c(3.2, 2.8, 3.5, 3.1, 2.9, 3.4, 3.0, 2.7, 3.3, 3.6)`
+- Interfaz B: `c(2.5, 2.2, 2.8, 2.4, 2.6, 2.3, 2.7, 2.1, 2.9, 2.4)`
+
+Determine si existe diferencia significativa. Calcule el tamaño del efecto.
+
+**Problema 1.3** *(Muestras pareadas)*
+Presión arterial sistólica (mmHg) de 8 pacientes antes y después de un tratamiento:
+
+- Antes: `c(145, 138, 152, 141, 149, 137, 155, 143)`
+- Después: `c(132, 130, 141, 135, 138, 128, 144, 136)`
+
+¿Redujo significativamente la presión el tratamiento? (prueba unilateral, α = 0.05)
+
+---
+
+# ANOVA de Un Factor (One-Way ANOVA)
+
+## Fundamento Teórico
+
+El **Análisis de Varianza de un factor** (ANOVA) extiende la comparación de medias a
+**tres o más grupos** simultáneamente. Fue desarrollado por **Ronald A. Fisher** (1925).
+
+La idea central es descomponer la variación total de los datos en dos fuentes:
+
+$$SS_{Total} = SS_{Entre} + SS_{Dentro}$$
+
+El estadístico F es el cociente entre la varianza **entre grupos** y la varianza
+**dentro de grupos** (error):
+
+$$F = \frac{MS_{Entre}}{MS_{Dentro}} = \frac{SS_{Entre}/(k-1)}{SS_{Dentro}/(N-k)}$$
+
+donde $k$ = número de grupos y $N$ = total de observaciones.
+
+**Hipótesis:**
+- H₀: μ₁ = μ₂ = … = μₖ (todas las medias son iguales)
+- H₁: Al menos un par de medias difiere
+
+**Supuestos:**
+1. Normalidad dentro de cada grupo (Shapiro-Wilk)
+2. Homocedasticidad entre grupos (Levene o Bartlett)
+3. Independencia de observaciones
+
+> ⚠️ **Importante:** un ANOVA significativo sólo indica que *al menos un grupo*
+> difiere. Para saber *cuál*, se requieren **pruebas post hoc**.
+
+---
+
+## Ejemplo: Efecto del Método de Enseñanza
+
+**Contexto:** Tres métodos de enseñanza (Tradicional, Flipped Classroom, E-Learning)
+se aplican a grupos de 12 estudiantes. Se mide el rendimiento final (0–100).
+
+```{r anova1-datos}
+set.seed(2024)
+rendimiento <- c(
+  rnorm(12, mean=72, sd=8),   # Tradicional
+  rnorm(12, mean=80, sd=7),   # Flipped
+  rnorm(12, mean=76, sd=9)    # E-Learning
+)
+metodo <- factor(rep(c("Tradicional","Flipped","E-Learning"), each=12),
+                 levels=c("Tradicional","Flipped","E-Learning"))
+datos_anova1 <- data.frame(rendimiento = round(rendimiento, 1),
+                            metodo      = metodo)
+
+# Resumen descriptivo
+datos_anova1 %>%
+  group_by(metodo) %>%
+  summarise(n     = n(),
+            media = round(mean(rendimiento), 2),
+            sd    = round(sd(rendimiento), 2),
+            se    = round(sd(rendimiento)/sqrt(n()), 2))
+```
+
+```{r anova1-supuestos}
+# ── Normalidad por grupo ─────────────────────────────────────────
+datos_anova1 %>%
+  group_by(metodo) %>%
+  summarise(W = shapiro.test(rendimiento)$statistic,
+            p = round(shapiro.test(rendimiento)$p.value, 4))
+
+# ── Homogeneidad de varianzas ────────────────────────────────────
+leveneTest(rendimiento ~ metodo, data = datos_anova1)
+```
+
+```{r anova1-modelo}
+# ── Modelo ANOVA ─────────────────────────────────────────────────
+modelo_anova1 <- aov(rendimiento ~ metodo, data = datos_anova1)
+summary(modelo_anova1)
+```
+
+```{r anova1-eta}
+# ── Tamaño del efecto: η² (eta cuadrado) ─────────────────────────
+eta_squared(modelo_anova1, partial = FALSE)
+# Convención: η² < 0.06 pequeño | 0.06–0.14 mediano | > 0.14 grande
+```
+
+```{r anova1-posthoc}
+# ── Post hoc: Tukey HSD ──────────────────────────────────────────
+TukeyHSD(modelo_anova1, conf.level = 0.95)
+```
+
+```{r anova1-graf, fig.cap="Figura 5. Rendimiento por método de enseñanza con intervalos de confianza.", fig.height=4.5}
+datos_anova1 %>%
+  group_by(metodo) %>%
+  summarise(media = mean(rendimiento),
+            se    = sd(rendimiento)/sqrt(n()),
+            .groups="drop") %>%
+  ggplot(aes(x=metodo, y=media, fill=metodo)) +
+  geom_col(width=.55, alpha=.85, color="white") +
+  geom_errorbar(aes(ymin=media-1.96*se, ymax=media+1.96*se),
+                width=.18, linewidth=.9, color="#374151") +
+  geom_jitter(data=datos_anova1,
+              aes(x=metodo, y=rendimiento, color=metodo),
+              width=.12, size=1.8, alpha=.65, inherit.aes=FALSE) +
+  scale_fill_manual(values=c("#6366f1","#10b981","#f59e0b")) +
+  scale_color_manual(values=c("#4338ca","#065f46","#92400e")) +
+  coord_cartesian(ylim=c(50,100)) +
+  labs(title="ANOVA One-Way — Método de Enseñanza",
+       subtitle="Barras de error = IC 95% | puntos = observaciones individuales",
+       x="Método", y="Rendimiento promedio") +
+  theme_minimal(base_size=12) +
+  theme(legend.position="none")
+```
+
+```{r anova1-diagnostico, fig.cap="Figura 6. Diagnóstico de residuos del modelo ANOVA.", fig.height=4}
+par(mfrow=c(1,2), mar=c(4,4,3,1))
+plot(modelo_anova1, which=1, main="Residuos vs Ajustados")
+plot(modelo_anova1, which=2, main="Q-Q Normal de Residuos")
+par(mfrow=c(1,1))
+```
+
+---
+
+## 🎯 Problemas Propuestos — ANOVA One-Way
+
+**Problema 2.1**
+Se investiga el efecto de cuatro dietas (A, B, C, D) en la pérdida de peso (kg)
+durante 12 semanas en grupos de 10 participantes cada uno:
+
+```{r p-anova1, eval=FALSE}
+set.seed(55)
+dieta_A <- round(rnorm(10, 5.2, 1.1), 1)
+dieta_B <- round(rnorm(10, 6.8, 1.3), 1)
+dieta_C <- round(rnorm(10, 4.5, 1.0), 1)
+dieta_D <- round(rnorm(10, 7.2, 1.4), 1)
+```
+
+a) Verifique los supuestos de normalidad y homocedasticidad.
+b) Ejecute el ANOVA y concluya con α = 0.05.
+c) Si hay diferencias, identifique los pares significativos con Tukey HSD.
+d) Calcule η² e interprete el tamaño del efecto.
+
+**Problema 2.2**
+Un ensayo clínico evalúa tres dosis de un fármaco antihipertensivo (10 mg, 20 mg, 30 mg)
+más un grupo control (0 mg). La variable respuesta es la reducción de presión
+arterial (mmHg). Diseñe el estudio, genere datos simulados coherentes con el
+contexto y ejecute el análisis completo.
+
+---
+
+# ANOVA de Dos Factores (Two-Way ANOVA)
+
+## Fundamento Teórico
+
+El **ANOVA de dos factores** analiza simultáneamente el efecto de **dos variables
+independientes (factores)** sobre una variable dependiente cuantitativa. Además de
+los efectos principales de cada factor, evalúa la **interacción** entre ellos.
+
+El modelo lineal es:
+
+$$Y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk}$$
+
+donde:
+- $\alpha_i$ = efecto del nivel $i$ del Factor A
+- $\beta_j$ = efecto del nivel $j$ del Factor B
+- $(\alpha\beta)_{ij}$ = efecto de la interacción A×B
+- $\varepsilon_{ijk}$ = error aleatorio ~ N(0, σ²)
+
+**Hipótesis evaluadas simultáneamente:**
+
+| Hipótesis | H₀ | H₁ |
+|---|---|---|
+| Factor A | No hay efecto de A | A tiene efecto significativo |
+| Factor B | No hay efecto de B | B tiene efecto significativo |
+| Interacción A×B | No hay interacción | Existe interacción A×B |
+
+> 🔑 **Regla de interpretación:** si la interacción es **significativa**, los
+> efectos principales deben interpretarse con cautela; el efecto de un factor
+> depende del nivel del otro.
+
+---
+
+## Ejemplo: Fertilizante × Riego sobre Rendimiento Agrícola
+
+**Contexto:** Se estudia el efecto de 3 tipos de fertilizante (N, P, NK) y
+2 regímenes de riego (Básico, Optimizado) sobre el rendimiento de maíz (t/ha).
+Diseño factorial 3×2 con 8 repeticiones por celda.
+
+```{r anova2-datos}
+set.seed(2024)
+# Medias por celda (fertilizante × riego)
+medias <- matrix(c(3.8, 5.2,   # N:    Básico, Optimizado
+                   4.5, 5.8,   # P:    Básico, Optimizado
+                   5.1, 7.2),  # NK:   Básico, Optimizado
+                 nrow=3, byrow=TRUE)
+
+n_rep <- 8
+rendimiento_agr <- c()
+for(i in 1:3) for(j in 1:2)
+  rendimiento_agr <- c(rendimiento_agr, rnorm(n_rep, medias[i,j], .7))
+
+datos_anova2 <- data.frame(
+  rendimiento  = round(rendimiento_agr, 2),
+  fertilizante = factor(rep(c("N","P","NK"), each=2*n_rep),
+                        levels=c("N","P","NK")),
+  riego        = factor(rep(rep(c("Básico","Optimizado"), each=n_rep), 3),
+                        levels=c("Básico","Optimizado"))
+)
+
+datos_anova2 %>%
+  group_by(fertilizante, riego) %>%
+  summarise(n = n(), media = round(mean(rendimiento),2),
+            sd = round(sd(rendimiento),2), .groups="drop")
+```
+
+```{r anova2-supuestos}
+# Levene para homocedasticidad (factor combinado)
+datos_anova2 <- datos_anova2 %>%
+  mutate(celda = interaction(fertilizante, riego))
+leveneTest(rendimiento ~ celda, data = datos_anova2)
+```
+
+```{r anova2-modelo}
+# ── Modelo ANOVA Two-Way ─────────────────────────────────────────
+modelo_anova2 <- aov(rendimiento ~ fertilizante * riego,
+                     data = datos_anova2)
+summary(modelo_anova2)
+```
+
+```{r anova2-efectos}
+# ── Tamaños del efecto ───────────────────────────────────────────
+eta_squared(modelo_anova2, partial = TRUE)
+```
+
+```{r anova2-posthoc}
+# ── Post hoc: Tukey HSD ──────────────────────────────────────────
+TukeyHSD(modelo_anova2)
+```
+
+```{r anova2-interaccion, fig.cap="Figura 7. Gráfico de interacción Fertilizante × Riego.", fig.height=4.5}
+datos_anova2 %>%
+  group_by(fertilizante, riego) %>%
+  summarise(media = mean(rendimiento),
+            se    = sd(rendimiento)/sqrt(n()),
+            .groups="drop") %>%
+  ggplot(aes(x=fertilizante, y=media, color=riego, group=riego)) +
+  geom_line(linewidth=1.4) +
+  geom_point(size=4, shape=21, aes(fill=riego), color="white",
+             stroke=1.5) +
+  geom_errorbar(aes(ymin=media-se, ymax=media+se),
+                width=.12, linewidth=.8) +
+  scale_color_manual(values=c("#f59e0b","#3b82f6")) +
+  scale_fill_manual(values=c("#f59e0b","#3b82f6")) +
+  labs(title="ANOVA Two-Way — Interacción Fertilizante × Riego",
+       subtitle="Líneas no paralelas sugieren interacción significativa",
+       x="Tipo de Fertilizante", y="Rendimiento medio (t/ha)",
+       color="Riego", fill="Riego") +
+  theme_minimal(base_size=12) +
+  theme(legend.position="bottom")
+```
+
+```{r anova2-boxplot, fig.cap="Figura 8. Distribución de rendimiento por celda experimental.", fig.height=4.5}
+ggplot(datos_anova2, aes(x=fertilizante, y=rendimiento, fill=riego)) +
+  geom_boxplot(alpha=.75, position=position_dodge(width=.7),
+               width=.5, outlier.shape=21) +
+  scale_fill_manual(values=c("#fbbf24","#60a5fa")) +
+  labs(title="Distribución de Rendimiento por Grupo Experimental",
+       x="Fertilizante", y="Rendimiento (t/ha)", fill="Régimen de Riego") +
+  theme_minimal(base_size=12) +
+  theme(legend.position="bottom")
+```
+
+---
+
+## 🎯 Problemas Propuestos — ANOVA Two-Way
+
+**Problema 3.1**
+Se evalúa el tiempo de procesamiento (ms) de un algoritmo según:
+- Factor A: Lenguaje (Python, R, Julia) — 3 niveles
+- Factor B: Tamaño de datos (Pequeño, Grande) — 2 niveles
+- 6 réplicas por celda
+
+Genere datos coherentes con la hipótesis de que Julia es más rápido y los datos
+grandes tardan más. Ejecute el análisis, evalúe la interacción e interprete.
+
+**Problema 3.2**
+Un ensayo de laboratorio estudia la absorción de un medicamento (mg/mL) según:
+- Factor A: Formulación (Tableta, Cápsula, Solución)
+- Factor B: Hora de administración (Ayunas, Postprandial)
+- 10 sujetos por celda
+
+a) ¿Existe efecto principal del tipo de formulación?
+b) ¿La hora de administración modifica el efecto de la formulación? (interacción)
+c) Grafique el perfil de interacción e interprete.
+
+---
+
+# Pruebas Estadísticas Adicionales
+
+## Prueba de Normalidad: Shapiro-Wilk y Kolmogorov-Smirnov
+
+```{r normalidad}
+set.seed(1)
+x_normal  <- rnorm(50, 100, 15)
+x_sesgado <- rexp(50, rate=0.05)
+
+cat("=== Shapiro-Wilk ===\n")
+cat("Datos normales:\n"); print(shapiro.test(x_normal))
+cat("Datos sesgados:\n"); print(shapiro.test(x_sesgado))
+
+cat("\n=== Lilliefors (KS modificado) — paquete nortest ===\n")
+cat("Datos normales:\n"); print(lillie.test(x_normal))
+```
+
+```{r normalidad-graf, fig.cap="Figura 9. Comparación Q-Q: distribución normal vs sesgada.", fig.height=4}
+par(mfrow=c(1,2), mar=c(4,4,3,1))
+qqnorm(x_normal,  main="Q-Q: Datos Normales",  pch=19, col="#3b82f6")
+qqline(x_normal,  col="#dc2626", lwd=2)
+qqnorm(x_sesgado, main="Q-Q: Datos Sesgados", pch=19, col="#f59e0b")
+qqline(x_sesgado, col="#dc2626", lwd=2)
+par(mfrow=c(1,1))
+```
+
+---
+
+## Prueba de Chi-Cuadrado (χ²)
+
+### χ² de Independencia
+
+**Pregunta:** ¿Existe asociación entre sexo y preferencia de modalidad de estudio?
+
+```{r chi2-independencia}
+tabla <- matrix(c(45, 30, 25,   # Hombres: Presencial, Híbrida, Virtual
+                  28, 42, 35),  # Mujeres:  Presencial, Híbrida, Virtual
+                nrow=2, byrow=TRUE,
+                dimnames=list(Sexo=c("Hombre","Mujer"),
+                              Modalidad=c("Presencial","Híbrida","Virtual")))
+print(tabla)
+# H₀: Sexo y modalidad son independientes
+resultado_chi2 <- chisq.test(tabla)
+print(resultado_chi2)
+# Residuos estandarizados
+cat("\nResiduos de Pearson estandarizados:\n")
+print(round(resultado_chi2$residuals, 3))
+```
+
+### χ² de Bondad de Ajuste
+
+**Pregunta:** ¿Los nacimientos se distribuyen uniformemente en los meses del año?
+
+```{r chi2-bondad}
+nacimientos <- c(82, 75, 88, 79, 91, 84, 93, 87, 78, 83, 76, 81)
+esperado    <- rep(sum(nacimientos)/12, 12)
+resultado_bon <- chisq.test(nacimientos, p=rep(1/12,12))
+print(resultado_bon)
+```
+
+---
+
+## Correlación: Pearson y Spearman
+
+```{r correlacion}
+set.seed(42)
+horas_estudio <- round(runif(30, 1, 10), 1)
+nota_examen   <- round(50 + 4.5*horas_estudio + rnorm(30, 0, 5), 1)
+
+# Pearson (paramétrica — requiere normalidad bivariada y relación lineal)
+cor_pearson  <- cor.test(horas_estudio, nota_examen, method="pearson")
+# Spearman (no paramétrica — basada en rangos)
+cor_spearman <- cor.test(horas_estudio, nota_examen, method="spearman")
+
+cat("=== Correlación de Pearson ===\n")
+cat(sprintf("r = %.4f   p = %.4f\n\n", cor_pearson$estimate, cor_pearson$p.value))
+cat("=== Correlación de Spearman ===\n")
+cat(sprintf("ρ = %.4f   p = %.4f\n", cor_spearman$estimate, cor_spearman$p.value))
+```
+
+```{r correlacion-graf, fig.cap="Figura 10. Dispersión horas de estudio vs nota obtenida.", fig.height=4}
+df_cor <- data.frame(horas=horas_estudio, nota=nota_examen)
+ggplot(df_cor, aes(x=horas, y=nota)) +
+  geom_point(color="#6366f1", size=3, alpha=.8) +
+  geom_smooth(method="lm", se=TRUE, color="#dc2626",
+              fill="#fca5a5", alpha=.25) +
+  annotate("text", x=2, y=90,
+           label=sprintf("r = %.3f\np < .001", cor_pearson$estimate),
+           size=4, color="#374151", fontface="bold") +
+  labs(title="Correlación de Pearson — Horas de Estudio vs Nota",
+       x="Horas de Estudio", y="Nota del Examen") +
+  theme_minimal(base_size=12)
+```
+
+---
+
+## Pruebas No Paramétricas
+
+### Prueba de Wilcoxon (Mann-Whitney U)
+
+Alternativa no paramétrica a la prueba t para dos muestras independientes
+cuando no se cumplen los supuestos de normalidad.
+
+```{r wilcoxon-mw}
+set.seed(5)
+grupo1 <- c(12, 18, 25, 9, 31, 16, 22, 8, 29, 14)
+grupo2 <- c(8,  11, 17, 6, 24, 13, 15, 5, 20, 10)
+
+# H₀: Las distribuciones son idénticas (mediana₁ = mediana₂)
+wilcox.test(grupo1, grupo2,
+            alternative="two.sided",
+            conf.int=TRUE,
+            conf.level=0.95)
+```
+
+### Prueba de Wilcoxon de Rangos con Signo (Pareada)
+
+Alternativa no paramétrica a la prueba t pareada.
+
+```{r wilcoxon-pareado}
+antes_np  <- c(8.5, 7.2, 9.1, 6.8, 8.0, 7.5, 9.3, 6.5, 8.8, 7.9)
+despues_np<- c(7.1, 6.0, 7.8, 5.9, 7.2, 6.5, 8.0, 5.5, 7.5, 6.8)
+
+# H₀: No hay cambio en la mediana (mediana de diferencias = 0)
+wilcox.test(despues_np, antes_np,
+            paired=TRUE,
+            alternative="less",    # H₁: despues < antes
+            conf.int=TRUE)
+```
+
+### Prueba de Kruskal-Wallis
+
+Alternativa no paramétrica al ANOVA One-Way para k grupos independientes.
+
+```{r kruskal-wallis}
+set.seed(9)
+g1 <- round(rnorm(12, 50, 10))
+g2 <- round(rnorm(12, 60, 12))
+g3 <- round(rnorm(12, 55,  9))
+
+df_kw <- data.frame(
+  valor = c(g1, g2, g3),
+  grupo = factor(rep(c("G1","G2","G3"), each=12))
+)
+
+# H₀: Las k distribuciones son idénticas
+kruskal.test(valor ~ grupo, data=df_kw)
+```
+
+```{r kruskal-posthoc}
+# Post hoc no paramétrico: Dunn con corrección de Bonferroni
+dunn_test(df_kw, valor ~ grupo, p.adjust.method="bonferroni")
+```
+
+---
+
+## Regresión Lineal Simple
+
+La **regresión lineal** modela la relación entre una variable dependiente continua
+y una o más predictoras. El modelo simple es:
+
+$$\hat{Y} = \beta_0 + \beta_1 X + \varepsilon, \quad \varepsilon \sim N(0,\sigma^2)$$
+
+```{r regresion}
+set.seed(42)
+df_reg <- data.frame(
+  X = seq(1, 20, by=0.5),
+  Y = 10 + 2.5*seq(1,20,by=0.5) + rnorm(39, 0, 4)
+)
+
+modelo_reg <- lm(Y ~ X, data=df_reg)
+summary(modelo_reg)
+```
+
+```{r regresion-diagnostico, fig.cap="Figura 11. Diagnóstico de regresión lineal.", fig.height=4.5}
+par(mfrow=c(2,2), mar=c(4,4,3,1))
+plot(modelo_reg, which=1:4, col="#3b82f6", pch=19, cex=.7)
+par(mfrow=c(1,1))
+```
+
+---
+
+## Prueba de McNemar (Datos Pareados Categóricos)
+
+```{r mcnemar}
+# Evaluación de diagnóstico antes y después de capacitación
+# Filas = antes | Columnas = después
+tabla_mc <- matrix(c(40, 10,   # Antes correcto: después correcto / incorrecto
+                     15, 35),  # Antes incorrecto: después correcto / incorrecto
+                   nrow=2,
+                   dimnames=list(Antes=c("Correcto","Incorrecto"),
+                                 Despues=c("Correcto","Incorrecto")))
+print(tabla_mc)
+# H₀: No hay cambio en la proporción de diagnósticos correctos
+mcnemar.test(tabla_mc)
+```
+
+---
+
+## Resumen Comparativo de Pruebas
+
+```{r tabla-resumen, echo=FALSE}
+resumen_pruebas <- data.frame(
+  Prueba = c("t una muestra","t dos muestras","t pareada",
+             "ANOVA one-way","ANOVA two-way",
+             "Chi² independencia","Chi² bondad",
+             "Pearson","Spearman",
+             "Wilcoxon MW","Wilcoxon rangos","Kruskal-Wallis","McNemar"),
+  Tipo = c(rep("Paramétrica",5),rep("Paramétrica/Asoc.",2),
+           rep("Correlación",2),rep("No paramétrica",4)),
+  Funcion_R = c("t.test(x, mu=)","t.test(x,y)","t.test(x,y,paired=T)",
+                "aov(y~A)","aov(y~A*B)",
+                "chisq.test(tabla)","chisq.test(x,p=)",
+                "cor.test(method='pearson')","cor.test(method='spearman')",
+                "wilcox.test(x,y)","wilcox.test(x,y,paired=T)",
+                "kruskal.test(y~g)","mcnemar.test()"),
+  Alternativa_NP = c("Wilcoxon rangos con signo","Mann-Whitney U","Wilcoxon rangos",
+                     "Kruskal-Wallis","—","—","—","Spearman","—","—","—","—","—")
+)
+knitr::kable(resumen_pruebas,
+             col.names=c("Prueba","Tipo","Función R","Alternativa NP"),
+             caption="Tabla 6. Resumen de pruebas estadísticas y sus funciones en R.")
+```
+
+---
+
+# Flujo de Trabajo Recomendado
+
+```{r workflow, eval=FALSE}
+# ── FLUJO ESTÁNDAR DE ANÁLISIS INFERENCIAL EN R ──────────────────
+
+# 1. EXPLORACIÓN DESCRIPTIVA
+summary(datos)
+datos %>% group_by(factor) %>%
+  summarise(n=n(), media=mean(var), sd=sd(var))
+
+# 2. VERIFICAR SUPUESTOS
+shapiro.test(datos$var)            # Normalidad
+leveneTest(var ~ factor, data=datos)  # Homocedasticidad
+
+# 3. SELECCIONAR Y EJECUTAR LA PRUEBA
+modelo <- aov(var ~ factor, data=datos)  # o t.test(), etc.
+summary(modelo)
+
+# 4. CALCULAR TAMAÑO DEL EFECTO
+eta_squared(modelo)   # ANOVA
+cohens_d(var ~ grupo, data=datos)  # t-test
+
+# 5. POST HOC (si es ANOVA significativo)
+TukeyHSD(modelo)
+# o dunn_test() para no paramétrico
+
+# 6. VISUALIZACIÓN
+ggplot(datos, aes(x=factor, y=var, fill=factor)) +
+  geom_boxplot() + geom_jitter() + theme_minimal()
+
+# 7. REPORTAR: estadístico, gl, p, IC, tamaño del efecto
+```
+
+---
+
+# Información de Sesión
+
+```{r session-info}
+sessionInfo()
+```
+
+---
+
+# Referencias
+
+Cohen, J. (1988). *Statistical power analysis for the behavioral sciences*
+(2nd ed.). Lawrence Erlbaum Associates.
+
+Fisher, R. A. (1925). *Statistical methods for research workers.*
+Oliver & Boyd.
+
+Montgomery, D. C., & Runger, G. C. (2018). *Applied statistics and
+probability for engineers* (7th ed.). Wiley.
+
+R Core Team. (2024). *R: A language and environment for statistical
+computing.* R Foundation for Statistical Computing.
+https://www.R-project.org/
+
+Student [Gosset, W. S.]. (1908). The probable error of a mean.
+*Biometrika, 6*(1), 1–25. https://doi.org/10.2307/2331554
+
+Triola, M. F. (2018). *Estadística* (13.ª ed.). Pearson Educación.
+
+Wickham, H., & Grolemund, G. (2017). *R for data science.*
+O'Reilly Media. https://r4ds.had.co.nz/
+
+---
+
+<div style="text-align:center; margin-top:48px; padding-top:20px;
+            border-top:1px solid #e2e8f0; color:#94a3b8; font-size:.82rem;">
+  Vicerrectoría de Investigación · Universidad Autónoma de Chiriquí (UNACHI) ·
+  Documento generado con R Markdown / knitr · `r format(Sys.Date(), "%Y")`
+</div>
